@@ -1,0 +1,36 @@
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "redtube_api"
+version = "1.0"
+description = "An API for redtube.com"
+authors = [
+  {name = "EchterAlsFake", email = "EchterAlsFake@proton.me"}
+]
+requires-python = ">=3.10"
+license = "LGPL-3.0-only"
+license-files = ["LICENSE"]
+keywords = ["redtube", "phub", "porn", "api", "web scrapper", "api wrapper"]
+classifiers = [
+  "Programming Language :: Python"
+]
+dependencies = [
+  "eaf_base_api",
+  "m3u8",
+  "bs4",
+  "chompjs>=1.4.1",
+]
+
+[project.optional-dependencies]
+av = ["av; python_version >= '3.10'"]
+full = ["lxml"] # H2 for HTTP 2.0 support, LXML for faster parsing speed, though optional :)
+
+[project.urls]
+Documentation = "https://github.com/EchterAlsFake/API_Docs/blob/master/Porn_APIs/redtube.md"
+Repository = "https://github.com/EchterAlsFake/redtube_api"
+
+[tool.uv.build-backend]
+module-name = "redtube_api"
+module-root = ""
