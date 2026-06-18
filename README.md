@@ -8,10 +8,6 @@
 
 <br>
 
-> [!CAUTION]
-> This is still being worked on, do not use yet!!!!!!!!
-
-
 # Disclaimer
 > [!IMPORTANT]
 > This is an unofficial and unaffiliated project. Please read the full disclaimer before use:
