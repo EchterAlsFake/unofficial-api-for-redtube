@@ -47,6 +47,14 @@ except (ModuleNotFoundError, ImportError):
     from .modules.type_hints import *
 
 
+def get_element_safe(stuff):
+    try:
+        return stuff.text
+
+    except AttributeError:
+        return None
+
+
 async def on_error(url: str, error: Exception, attempt: int) -> bool:
     print(f"URL: {url}, ERROR: {error}, Attempt: {attempt}")
 
@@ -389,16 +397,6 @@ class Playlist(Helper):
         return self.soup.find("p", class_="playlist_desc").find("a").text
 
     @cached_property
-    def tags(self) -> list:
-        tags = []
-
-        _tags = self.soup.find_all("span", class_="playlist_taglist")
-        for tag in _tags:
-            tags.append(tag.find("a").text)
-
-        return tags
-
-    @cached_property
     def rating_percent(self) -> str:
         return self.soup.find("div", class_="rating_percent js_rating_percent").text
 
@@ -466,51 +464,18 @@ class Pornstar(Helper):
 
     @cached_property
     def name(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[3].text
+        return self.soup.find("h1", class_="name-title").text
 
     @cached_property
-    def date_of_birth(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[4].text
+    def pornstar_information(self) -> dict:
+        thing = {}
+        keys = self.soup.find_all("p", class_="info-stat-label")
+        values = self.soup.find_all("p", class_="info-stat-data")
 
-    @cached_property
-    def height(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[5].text
+        for key, value in zip(keys, values):
+            thing.update({key.text: value.text})
 
-    @cached_property
-    def ethnicity(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[6].text
-
-    @cached_property
-    def weight(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[7].text
-
-    @cached_property
-    def activity(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[8].text
-
-    @cached_property
-    def piercings(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[9].text
-
-    @cached_property
-    def tattoos(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[10].text
-
-    @cached_property
-    def birth_place(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[11].text
-
-    @cached_property
-    def model_rank(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[0].text
-
-    @cached_property
-    def views(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[1].text
-
-    @cached_property
-    def subscribers(self) -> str:
-        return self.soup.find_all("p", class_="info-stat-data")[2].text
+        return thing
 
 
     async def get_videos(self, pages: int = 2,
