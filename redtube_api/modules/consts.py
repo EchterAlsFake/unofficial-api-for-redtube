@@ -51,3 +51,16 @@ def extractor_playlist(html_content: str) -> list:
         video_urls.append(f"https://www.redtube.com{link}")
 
     return video_urls
+
+
+def extractor_channel(html_content: str) -> list:
+    video_urls = []
+    soup = BeautifulSoup(html_content, parser)
+    stuff = soup.find("ul", attrs={"id": "related_videos_center"})
+    videos = stuff.find_all("li", class_="js-pop thumbnail-card js_thumbContainer videoblock_list tm_video_link tm_video_block")
+
+    for video in videos:
+        link = video.find("a").get("href")
+        video_urls.append(f"https://www.redtube.com{link}")
+
+    return video_urls

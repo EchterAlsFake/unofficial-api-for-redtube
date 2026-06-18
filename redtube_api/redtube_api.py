@@ -18,7 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import re
 import json
-from gettext import find
 
 import chompjs
 import logging
@@ -418,6 +417,8 @@ class Playlist(Helper):
     async def get_videos(self, pages: int = 2,
                      videos_concurrency: int | None = None,
                      pages_concurrency: int | None = None,
+                     on_video_error: on_error_hint = on_error,
+                     on_page_error: on_error_hint = None
                      ) -> AsyncGenerator[Video, None]:
         # I am too lazy to implement search filters
 
@@ -428,7 +429,8 @@ class Playlist(Helper):
 
         async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
                                          max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
-                                         on_video_error=on_error):
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error):
             yield video
 
 
@@ -514,6 +516,8 @@ class Pornstar(Helper):
     async def get_videos(self, pages: int = 2,
                      videos_concurrency: int | None = None,
                      pages_concurrency: int | None = None,
+                     on_video_error: on_error_hint = on_error,
+                     on_page_error: on_error_hint = None
                      ) -> AsyncGenerator[Video, None]:
 
         page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
@@ -522,8 +526,81 @@ class Pornstar(Helper):
         assert videos_concurrency and pages_concurrency
         async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
                                          max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
-                                         on_video_error=on_error):
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error):
             yield video
+
+
+class Channel(Helper):
+    def __init__(self, url: str, core: BaseCore):
+        super().__init__(core=core, video_constructor=Video)
+        self.core = core
+        self.url = url
+        self._soup = None
+        self.html_content = None
+        self.logger = setup_logger(name="RedTube API - [Channel]", log_file=None, level=logging.ERROR)
+
+    def enable_logging(self, log_file: str | None = None, level: int | None = None, log_ip: str | None = None,
+                       log_port: int | None = None):
+        if not level:
+            level = logging.DEBUG
+
+        self.logger = setup_logger(name="RedTube API - [Channel]", log_file=log_file, level=level, http_ip=log_ip,
+                                   http_port=log_port)
+
+    @property
+    def soup(self) -> BeautifulSoup:
+        if not self._soup:
+            raise ValueError("You probably forgot to call init")
+
+        return self._soup
+
+
+    async def init(self):
+        if not self.html_content:
+            self.html_content = await get_html_content(core=self.core, url=self.url)
+
+        assert isinstance(self.html_content, str)
+        self._soup = BeautifulSoup(self.html_content, parser)
+        return self
+
+    @cached_property
+    def name(self) -> str:
+        return self.soup.find("h1", class_="name-title").text
+
+    @cached_property
+    def rank(self) -> str:
+        return self.soup.find_all("p", class_="info-stat-data")[0].text
+
+    @cached_property
+    def videos_count(self) -> str:
+        return self.soup.find_all("p", class_="info-stat-data")[1].text
+
+    @cached_property
+    def subscribers_count(self) -> str:
+        return self.soup.find_all("p", class_="info-stat-data")[2].text
+
+    @cached_property
+    def views(self) -> str:
+        return self.soup.find_all("p", class_="info-stat-data")[3].text
+
+    async def get_videos(self, pages: int = 2,
+                     videos_concurrency: int | None = None,
+                     pages_concurrency: int | None = None,
+                     on_video_error: on_error_hint = on_error,
+                     on_page_error: on_error_hint = None
+                     ) -> AsyncGenerator[Video, None]:
+
+        page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
+        videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
+        pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
+        assert videos_concurrency and pages_concurrency
+        async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
+                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error):
+            yield video
+
 
 
 class Client(Helper):
@@ -557,9 +634,15 @@ class Client(Helper):
         playlist = Playlist(core=self.core, url=url)
         return await playlist.init()
 
+    async def get_channel(self, url: str) -> Channel:
+        channel = Channel(core=self.core, url=url)
+        return await channel.init()
+
     async def search(self, query: str, pages: int = 2,
                      videos_concurrency: int | None = None,
                      pages_concurrency: int | None = None,
+                     on_video_error: on_error_hint = on_error,
+                     on_page_error: on_error_hint = None
                      ) -> AsyncGenerator[Video, None]:
         # I am too lazy to implement search filters
 
@@ -570,14 +653,6 @@ class Client(Helper):
 
         async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
                                          max_page_concurrency=pages_concurrency, video_link_extractor=extractor_playlist,
-                                         on_video_error=on_error):
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error):
             yield video
-
-
-async def main():
-    client = Client()
-    playlist = await client.get_playlist("https://de.redtube.com/playlist/273511")
-    async for video in playlist.get_videos():
-        print(video.title)
-
-asyncio.run(main())
