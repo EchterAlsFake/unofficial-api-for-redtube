@@ -23,6 +23,10 @@
 # Features
 - Fetch videos + metadata
 - Download videos
+- Fetch Pornstars
+- Fetch Channels
+- Fetch Playlists
+- Search for videos
 - Asynchronous
 - Built-in caching
 - Easy interface

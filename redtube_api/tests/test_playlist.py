@@ -12,7 +12,7 @@ async def test_all():
     assert isinstance(playlist.rating_count, str) and len(playlist.rating_count) > 0
     assert isinstance(playlist.rating_percent, str) and len(playlist.rating_percent) > 0
     assert isinstance(playlist.video_count, str) and len(playlist.video_count) > 0
-    assert isinstance(playlist.viwws, str) and len(playlist.viwws) > 0
+    assert isinstance(playlist.views, str) and len(playlist.views) > 0
 
 
     idx = 0

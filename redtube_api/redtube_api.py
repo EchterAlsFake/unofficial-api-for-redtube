@@ -18,13 +18,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import re
 import json
-
 import chompjs
 import logging
 import asyncio
 
-from curl_cffi import Response, AsyncSession
 from functools import cached_property
+from curl_cffi import Response, AsyncSession
 from typing import Any, List, Dict, AsyncGenerator
 from base_api.modules.type_hints import DownloadReport
 from base_api.base import BaseCore, setup_logger, Helper
@@ -405,7 +404,7 @@ class Playlist(Helper):
         return self.soup.find("span", class_="playlist_stats_value").text
 
     @cached_property
-    def viwws(self) -> str:
+    def views(self) -> str:
         return self.soup.find_all("span", class_="playlist_stats_value")[1].text
 
     @cached_property

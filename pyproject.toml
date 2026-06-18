@@ -27,9 +27,6 @@ dependencies = [
 av = ["av; python_version >= '3.10'"]
 full = ["lxml"] # H2 for HTTP 2.0 support, LXML for faster parsing speed, though optional :)
 
-[tool.uv.sources]
-eaf_base_api = { path = "/home/asuna/PycharmProjects/eaf_base_api", editable = true }
-
 [project.urls]
 Documentation = "https://github.com/EchterAlsFake/API_Docs/blob/master/Porn_APIs/redtube.md"
 Repository = "https://github.com/EchterAlsFake/redtube_api"
