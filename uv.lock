@@ -263,28 +263,14 @@ wheels = [
 [[package]]
 name = "eaf-base-api"
 version = "3.3"
-source = { editable = "../eaf_base_api" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "tenacity" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "av", marker = "python_full_version >= '3.10' and extra == 'hls'" },
-    { name = "curl-cffi" },
-    { name = "m3u8", marker = "extra == 'hls'" },
-    { name = "tenacity", specifier = ">=9.1.2" },
-]
-provides-extras = ["hls"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy" },
-    { name = "pylint" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "types-m3u8" },
+sdist = { url = "https://files.pythonhosted.org/packages/f1/e9/875310221c40549b8d4471a847d46e24032aeaa761da863a3bada22ff3f4/eaf_base_api-3.3.tar.gz", hash = "sha256:789a86e5fc53dbbdbc2dd6014f5c4bb091824f462c3de046051d47b417b00ba4", size = 37692, upload-time = "2026-06-17T19:53:48.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/14/e244f3172b222fc4c9dee91cd90f688a7207215afe2275924a0fefd6e994/eaf_base_api-3.3-py3-none-any.whl", hash = "sha256:4e9dc159c79ad2f9f4d713bb512421a0b0e6ccf48b6f335becb7d8ba4ed8fa00", size = 40712, upload-time = "2026-06-17T19:53:47.575Z" },
 ]
 
 [[package]]
@@ -480,7 +466,7 @@ requires-dist = [
     { name = "av", marker = "python_full_version >= '3.10' and extra == 'av'" },
     { name = "bs4" },
     { name = "chompjs", specifier = ">=1.4.1" },
-    { name = "eaf-base-api", editable = "../eaf_base_api" },
+    { name = "eaf-base-api" },
     { name = "lxml", marker = "extra == 'full'" },
     { name = "m3u8" },
 ]

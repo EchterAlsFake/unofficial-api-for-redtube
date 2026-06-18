@@ -14,7 +14,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-
+from __future__ import annotations
 import os
 import re
 import json
@@ -44,14 +44,6 @@ except (ModuleNotFoundError, ImportError):
     from .modules.consts import *
     from .modules.errors import *
     from .modules.type_hints import *
-
-
-def get_element_safe(stuff):
-    try:
-        return stuff.text
-
-    except AttributeError:
-        return None
 
 
 async def on_error(url: str, error: Exception, attempt: int) -> bool:
@@ -325,6 +317,30 @@ class Video:
             pass  # Return whatever was parsed up to failure, or empty dict
         return parsed_tags
 
+    @cached_property
+    def author_name(self) -> str:
+        return self.soup.find("a", class_="video-infobox-link").text
+
+    async def author(self) -> Amateur | Pornstar | Channel:
+        link = self.soup.find("a", class_="video-infobox-link").get("href")
+        url = f"https://www.redtube.com{link}"
+
+        match url: # Wanted to use this one time in my life lol
+            case _ if "amateur" in url:
+                amateur = Amateur(url=url, core=self.core)
+                return await amateur.init()
+
+            case _ if "pornstar" in url:
+                pornstar = Pornstar(url=url, core=self.core)
+                return await pornstar.init()
+
+            case _ if "channel" in url:
+                channel = Channel(url=url, core=self.core)
+                return await channel.init()
+
+            case _:
+                raise ValueError("Couldn't determine Author type, please report this")
+
     async def download(self, quality, path="./", callback: callback_hint=None, no_title=False, remux: bool = False,
                  callback_remux: callback_hint=None, start_segment: int = 0, stop_event: asyncio.Event | None = None,
                  segment_state_path: str | None = None, segment_dir: str | None = None,
@@ -391,8 +407,13 @@ class Playlist(Helper):
     def title(self) -> str:
         return self.soup.find("h1", attrs={"id": "playlist_title"}).text
 
+    async def author(self) -> User:
+        stuff = self.soup.find("p", class_="playlist_desc").find("a").get("href")
+        user = User(core=self.core, url=f"https://www.redtube.com{stuff}")
+        return await user.init()
+
     @cached_property
-    def author(self) -> str:
+    def author_name(self) -> str:
         return self.soup.find("p", class_="playlist_desc").find("a").text
 
     @cached_property
@@ -431,19 +452,20 @@ class Playlist(Helper):
             yield video
 
 
-class Pornstar(Helper):
-    def __init__(self, url: str, core: BaseCore, html_content: str | None = None):
-        super().__init__(core=core, video_constructor=Video)
+class UserHelper(Helper):
+    def __init__(self, url: str, core: BaseCore, alternative_constructor=None):
+        super().__init__(core=core, video_constructor=Video, alternative_constructor=None)
         self.url = url
         self.core = core
-        self.html_content = html_content
-        self.logger = setup_logger(name="RedTube API - [Pornstar]", log_file=None, level=logging.ERROR)
+        self.html_content = None
+        self.logger = setup_logger(name="RedTube API - [Amateur]", log_file=None, level=logging.ERROR)
 
-    def enable_logging(self, log_file: str | None = None, level: int | None =None, log_ip: str | None = None, log_port: int | None = None):
+    def enable_logging(self, log_file: str | None = None, level: int | None = None, log_ip: str | None = None,
+                       log_port: int | None = None):
         if not level:
             level = logging.DEBUG
 
-        self.logger = setup_logger(name="RedTube API - [Pornstar]", log_file=log_file, level=level, http_ip=log_ip,
+        self.logger = setup_logger(name="RedTube API - [Amateur]", log_file=log_file, level=level, http_ip=log_ip,
                                    http_port=log_port)
 
     @property
@@ -454,8 +476,7 @@ class Pornstar(Helper):
         return self._soup
 
     async def init(self):
-        if not self.html_content:
-            self.html_content = await get_html_content(core=self.core, url=self.url)
+        self.html_content = await get_html_content(core=self.core, url=self.url)
 
         assert isinstance(self.html_content, str)
         self._soup = BeautifulSoup(self.html_content, parser)
@@ -463,8 +484,54 @@ class Pornstar(Helper):
 
     @cached_property
     def name(self) -> str:
-        return self.soup.find("h1", class_="name-title").text
+        try:
+            return self.soup.find("h1", class_="name-title").text
 
+        except AttributeError:
+            return re.findall(r'username: "(.*?)"', self.html_content)[1]
+
+    async def get_videos(self, pages: int = 2,
+                         videos_concurrency: int | None = None,
+                         pages_concurrency: int | None = None,
+                         on_video_error: on_error_hint = on_error,
+                         on_page_error: on_error_hint = None
+                         ) -> AsyncGenerator[Video, None]:
+
+        page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
+        videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
+        pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
+        assert videos_concurrency and pages_concurrency
+        async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
+                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error):
+            yield video
+
+
+class User(UserHelper):
+    def __init__(self, url: str, core: BaseCore):
+        super().__init__(url=url, core=core, alternative_constructor=Playlist)  # Need to supply playlist here
+
+    async def get_playlists(self, pages: int = 2,
+                            videos_concurrency: int | None = None,
+                            pages_concurrency: int | None = None,
+                            on_video_error: on_error_hint = on_error,
+                            on_page_error: on_error_hint = None
+                            ) -> AsyncGenerator[Playlist, None]:
+        page_urls = [f"{self.url}&page={page}" for page in range(1, pages + 1)]
+        videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
+        pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
+        assert videos_concurrency and pages_concurrency
+
+        async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
+                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
+                                         on_video_error=on_video_error,
+                                         on_page_error=on_page_error,
+                                         use_alternative_constructor=True):
+            yield video
+
+
+class Pornstar(UserHelper):
     @cached_property
     def pornstar_information(self) -> dict:
         thing = {}
@@ -477,22 +544,8 @@ class Pornstar(Helper):
         return thing
 
 
-    async def get_videos(self, pages: int = 2,
-                     videos_concurrency: int | None = None,
-                     pages_concurrency: int | None = None,
-                     on_video_error: on_error_hint = on_error,
-                     on_page_error: on_error_hint = None
-                     ) -> AsyncGenerator[Video, None]:
-
-        page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
-        videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
-        pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
-        assert videos_concurrency and pages_concurrency
-        async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
-                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
-                                         on_video_error=on_video_error,
-                                         on_page_error=on_page_error):
-            yield video
+class Amateur(UserHelper):
+    pass
 
 
 class Channel(Helper):
@@ -566,7 +619,6 @@ class Channel(Helper):
             yield video
 
 
-
 class Client(Helper):
     def __init__(self, core: BaseCore = BaseCore()):
         super().__init__(core=core, video_constructor=Video)
@@ -601,6 +653,10 @@ class Client(Helper):
     async def get_channel(self, url: str) -> Channel:
         channel = Channel(core=self.core, url=url)
         return await channel.init()
+
+    async def get_amateur(self, url: str) -> Amateur:
+        amateur = Amateur(core=self.core, url=url)
+        return await amateur.init()
 
     async def search(self, query: str, pages: int = 2,
                      videos_concurrency: int | None = None,

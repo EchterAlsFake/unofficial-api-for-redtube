@@ -15,7 +15,11 @@ async def test_all():
     assert isinstance(video.embed_code, str) and len(video.embed_code) > 0
     assert isinstance(video.is_autoplay_enabled, bool)
     assert isinstance(video.is_vr, bool)
+    assert isinstance(video.author_name, str) and len(video.author_name) > 0
+
+    author = await video.author()
+    assert isinstance(author.name, str) and len(author.name) > 0
 
 
-    stuff = await video.download(quality="best", return_report=True)
-    assert stuff["status"] == "completed"
+    stuff = await video.download(quality="worst", return_report=True)
+    assert stuff.status == "completed"
