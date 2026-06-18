@@ -76,3 +76,23 @@ def extractor_playlists(html_content: str) -> list:
         playlist_urls.append(f"https://www.redtube.com{play_url}")
 
     return playlist_urls
+
+
+def extractor_playlist_json(content: str | dict) -> list:
+    import json
+    if isinstance(content, str):
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return []
+    else:
+        data = content
+        
+    playlist_urls = []
+    playlists = data.get("data", {}).get("data", [])
+    for playlist in playlists:
+        url = playlist.get("url")
+        if url:
+            playlist_urls.append(f"https://www.redtube.com{url}")
+            
+    return playlist_urls

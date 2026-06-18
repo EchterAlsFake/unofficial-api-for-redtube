@@ -454,7 +454,7 @@ class Playlist(Helper):
 
 class UserHelper(Helper):
     def __init__(self, url: str, core: BaseCore, alternative_constructor=None):
-        super().__init__(core=core, video_constructor=Video, alternative_constructor=None)
+        super().__init__(core=core, video_constructor=Video, alternative_constructor=alternative_constructor)
         self.url = url
         self.core = core
         self.html_content = None
@@ -518,17 +518,21 @@ class User(UserHelper):
                             on_video_error: on_error_hint = on_error,
                             on_page_error: on_error_hint = None
                             ) -> AsyncGenerator[Playlist, None]:
-        page_urls = [f"{self.url}&page={page}" for page in range(1, pages + 1)]
+        page_urls = [f"https://de.redtube.com/user/{self.name}/playlists-data?page={page}" for page in range(1, pages + 1)]
         videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
         pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
         assert videos_concurrency and pages_concurrency
 
         async for video in self.iterator(target_page_urls=page_urls, max_video_concurrency=videos_concurrency,
-                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_html,
+                                         max_page_concurrency=pages_concurrency, video_link_extractor=extractor_playlist_json,
                                          on_video_error=on_video_error,
                                          on_page_error=on_page_error,
                                          use_alternative_constructor=True):
-            yield video
+            if hasattr(video, "init") and callable(video.init):
+                yield await video.init()
+
+            else:
+                yield video
 
 
 class Pornstar(UserHelper):
@@ -657,6 +661,10 @@ class Client(Helper):
     async def get_amateur(self, url: str) -> Amateur:
         amateur = Amateur(core=self.core, url=url)
         return await amateur.init()
+
+    async def get_user(self, url: str) -> User:
+        user = User(core=self.core, url=url)
+        return await user.init()
 
     async def search(self, query: str, pages: int = 2,
                      videos_concurrency: int | None = None,
