@@ -467,7 +467,7 @@ class User(UserHelper):
             raise ValueError("Cannot fetch playlists, because you have not populated the html yet")
 
         helper = Helper(core=self.core, constructor=Playlist)
-        page_urls = [f"https://de.redtube.com/user/{self.name}/playlists-data?page={page}" for page in range(1, pages + 1)]
+        page_urls = [f"https://redtube.com/user/{self.name}/playlists-data?page={page}" for page in range(1, pages + 1)]
         videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
         pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
         assert videos_concurrency and pages_concurrency
