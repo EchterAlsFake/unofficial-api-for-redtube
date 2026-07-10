@@ -1,4 +1,6 @@
 import pytest
+from base_api import DownloadConfigHLS
+
 from redtube_api import Client
 
 
@@ -13,13 +15,14 @@ async def test_all():
     assert isinstance(video.duration, int) and len(str(video.duration)) > 0
     assert isinstance(video.thumbnail, str) and len(video.thumbnail) > 0
     assert isinstance(video.embed_code, str) and len(video.embed_code) > 0
-    assert isinstance(video.is_autoplay_enabled, bool)
+    assert isinstance(video.is_auto_play_enabled, bool)
     assert isinstance(video.is_vr, bool)
     assert isinstance(video.author_name, str) and len(video.author_name) > 0
 
-    author = await video.author()
+    author = await video.author(True)
     assert isinstance(author.name, str) and len(author.name) > 0
 
+    config = DownloadConfigHLS(quality="worst", return_report=True)
 
-    stuff = await video.download(quality="worst", return_report=True)
+    stuff = await video.download(config)
     assert stuff.status == "completed"

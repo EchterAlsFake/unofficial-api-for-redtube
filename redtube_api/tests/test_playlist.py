@@ -14,13 +14,12 @@ async def test_all():
     assert isinstance(playlist.video_count, str) and len(playlist.video_count) > 0
     assert isinstance(playlist.views, str) and len(playlist.views) > 0
 
-    author = await playlist.author()
-    assert isinstance(author.name, str) and len(author.name) > 0
+    author = await playlist.get_author(True)
 
     idx = 0
-    async for playlist in author.get_playlists():
+    async for _playlist in author.get_playlists():
         idx += 1
-        assert isinstance(playlist.title, str) and len(playlist.title) > 0
+        assert isinstance(_playlist.video.title, str) and len(_playlist.video.title) > 0
 
         if idx >= 3:
             break
@@ -30,7 +29,7 @@ async def test_all():
     async for video in playlist.get_videos():
         idx += 1
 
-        assert isinstance(video.title, str)
+        assert isinstance(video.video.title, str)
 
         if idx >= 3:
             break
