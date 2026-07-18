@@ -12,7 +12,18 @@ authors = [
 requires-python = ">=3.12"
 license = "LGPL-3.0-only"
 license-files = ["LICENSE"]
-keywords = ["redtube", "porn", "api", "web scrapper", "api wrapper"]
+keywords = [
+    "api",
+    "scraper",
+    "async",
+    "asyncio",
+    "video-downloader",
+    "selectolax",
+    "chompjs",
+    "m3u8",
+    "hls",
+    "redtube"
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -28,7 +39,7 @@ dependencies = [
   "eaf-base-api",
   "m3u8",
   "selectolax",
-  "chompjs>=1.4.1",
+  "chompjs",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +49,9 @@ av = ["av"]
 Homepage = "https://github.com/EchterAlsFake/unofficial-api-for-redtube"
 Repository = "https://github.com/EchterAlsFake/unofficial-api-for-redtube"
 "Bug Tracker" = "https://github.com/EchterAlsFake/unofficial-api-for-redtube/issues"
+"Support me on Ko-Fi" = "https://ko-fi.com/EchterAlsFake"
+"Donate via PayPal" = "https://paypal.me/EchterAlsFake"
+"Donate via Crypto" = "https://nowpayments.io/donation/EchterAlsFake"
 
 [tool.uv.build-backend]
 module-name = "redtube_api"

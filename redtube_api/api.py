@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import os
 import re
+import copy
 import json
+import logging
 import chompjs
 import asyncio
 
@@ -35,9 +37,12 @@ from redtube_api.modules.errors import (BotDetection, NetworkError, NotFound, Un
                                         DownloadFailed)
 from redtube_api.modules.type_hints import on_error_hint
 
+logger = logging.getLogger("Redtube API")
+logger.addHandler(logging.NullHandler())
+
 
 async def on_error(url: str, error: Exception, attempt: int) -> bool:
-    print(f"URL: {url}, ERROR: {error}, Attempt: {attempt}")
+    logger.error(f"URL: {url}, ERROR: {error}, Attempt: {attempt}")
 
     if isinstance(error, ResourceGone):
         return False
@@ -104,7 +109,7 @@ class Video(BaseMedia):
         html_content = await get_html_content(core=self.core, url=self.url)
         assert isinstance(html_content, str)
         data: dict = await asyncio.to_thread(self._extract_html, html_content)
-        allowed_fields = [field.name for field in fields(self)]
+        allowed_fields = {field.name for field in fields(self)}
 
         for key, value in data.items():
             if key in allowed_fields:
@@ -310,7 +315,7 @@ class Video(BaseMedia):
         return "\n".join(m3u8_lines)
 
     async def download(self, configuration: DownloadConfigHLS) -> bool | DownloadReport:
-        config = configuration
+        config = copy.deepcopy(configuration)
         config.m3u8_base_url = self.m3u8_base_url
         if not config.no_title:
             config.path = os.path.join(config.path, f"{self.title}.mp4")
@@ -345,7 +350,7 @@ class Playlist(BaseMedia):
         html_content = await get_html_content(core=self.core, url=self.url)
         assert isinstance(html_content, str)
         data: dict = await asyncio.to_thread(self._extract_html, html_content)
-        allowed_fields = [field.name for field in fields(self)]
+        allowed_fields = {field.name for field in fields(self)}
 
         for key, value in data.items():
             if key in allowed_fields:
@@ -385,8 +390,9 @@ class Playlist(BaseMedia):
                      load_html: bool = False,
                      ) -> AsyncGenerator[ScrapeResult, None]:
         # I am too lazy to implement search filters
+        url = self.url
         helper = Helper(core=self.core, constructor=Video)
-        page_urls = [f"{self.url}&page={page}" for page in range(1, pages + 1)]
+        page_urls = [f"{url}&page={page}" for page in range(1, pages + 1)]
         videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
         pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
         assert videos_concurrency and pages_concurrency
@@ -412,7 +418,7 @@ class UserHelper(BaseMedia):
         html_content = await get_html_content(core=self.core, url=self.url)
         assert isinstance(html_content, str)
         data: dict = await asyncio.to_thread(self._extract_html, html_content)
-        allowed_fields = [field.name for field in fields(self)]
+        allowed_fields = {field.name for field in fields(self)}
 
         for key, value in data.items():
             if key in allowed_fields:
@@ -440,8 +446,9 @@ class UserHelper(BaseMedia):
                          load_html: bool = False,
                          ) -> AsyncGenerator[ScrapeResult, None]:
 
+        url = self.url
         helper = Helper(core=self.core, constructor=Video)
-        page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
+        page_urls = [f"{url}?page={page}" for page in range(1, pages + 1)]
         videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
         pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
         assert videos_concurrency and pages_concurrency
@@ -523,7 +530,7 @@ class Channel(BaseMedia):
         html_content = await get_html_content(core=self.core, url=self.url)
         assert isinstance(html_content, str)
         data: dict = await asyncio.to_thread(self._extract_html, html_content)
-        allowed_fields = [field.name for field in fields(self)]
+        allowed_fields = {field.name for field in fields(self)}
         for key, value in data.items():
             if key in allowed_fields:
                 setattr(self, key, value)
@@ -555,8 +562,9 @@ class Channel(BaseMedia):
                      load_html: bool = False,
                      ) -> AsyncGenerator[ScrapeResult, None]:
 
+        url = self.url
         helper = Helper(core=self.core, constructor=Video)
-        page_urls = [f"{self.url}?page={page}" for page in range(1, pages + 1)]
+        page_urls = [f"{url}?page={page}" for page in range(1, pages + 1)]
         videos_concurrency = videos_concurrency or self.core.configuration.videos_concurrency
         pages_concurrency = pages_concurrency or self.core.configuration.pages_concurrency
         assert videos_concurrency and pages_concurrency
