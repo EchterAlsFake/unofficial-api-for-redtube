@@ -5,7 +5,7 @@ from redtube_api import Client
 @pytest.mark.asyncio
 async def test_all():
     client = Client()
-    amateur = await client.get_amateur("https://de.redtube.com/amateur/d807fea-ph")
+    amateur = await client.get_amateur("https://de.redtube.com/amateur/littlereislin-ph-2")
 
     assert isinstance(amateur.name, str) and len(amateur.name) > 0
 
