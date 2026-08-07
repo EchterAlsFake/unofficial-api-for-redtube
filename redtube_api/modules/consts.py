@@ -80,7 +80,7 @@ def extractor_html(html_content: str) -> list:
                 if star_href:
                     pornstars_urls.append(f"https://www.redtube.com{star_href}")
 
-        videos_lol.append({
+        video_data = {
             "url": f"https://www.redtube.com{link}" if link else None,
             "video_id": video_id,
             "uploader_id": uploader_id,
@@ -93,7 +93,9 @@ def extractor_html(html_content: str) -> list:
             "author_url": author_link,
             "pornstars_names": pornstars_names,
             "pornstars_urls": pornstars_urls,
-        })
+        }
+        if video_data["url"]:
+            videos_lol.append(video_data)
 
     return videos_lol
 
@@ -129,7 +131,7 @@ def extractor_playlist_json(content: str | dict) -> list:
         # Build the absolute URL for the playlist
         playlist_url = f"https://www.redtube.com{url}" if url else None
 
-        playlist_urls.append({
+        playlist_data = {
             "views": views,
             "author_name": author,
             "updated_at": updated_at,
@@ -138,6 +140,8 @@ def extractor_playlist_json(content: str | dict) -> list:
             "video_count": videos_count,
             "rating_percent": vote_percentage,
             "status": status,
-        })
+        }
+        if playlist_data["url"]:
+            playlist_urls.append(playlist_data)
 
     return playlist_urls

@@ -19,7 +19,8 @@ async def test_all():
     idx = 0
     async for _playlist in author.get_playlists():
         idx += 1
-        assert isinstance(_playlist.video.title, str) and len(_playlist.video.title) > 0
+        item = _playlist.unwrap()
+        assert isinstance(item.title, str) and len(item.title) > 0
 
         if idx >= 3:
             break
@@ -29,7 +30,7 @@ async def test_all():
     async for video in playlist.get_videos():
         idx += 1
 
-        assert isinstance(video.video.title, str)
+        assert isinstance(video.unwrap().title, str)
 
         if idx >= 3:
             break
