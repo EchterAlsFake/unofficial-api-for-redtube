@@ -64,8 +64,8 @@ logger.addHandler(logging.NullHandler())
 def make_iterator_config() -> IteratorConfig:
     return IteratorConfig(
         load_specific_sources=("html",),
-        item_retry=RetryPolicy(max_attempts=3),
-        page_retry=RetryPolicy(max_attempts=3),
+        item_retry=None,
+        page_retry=None,
         page_error_mode=ErrorMode.SKIP,
         item_error_handler=None,
         page_error_handler=None,
@@ -429,7 +429,7 @@ class Playlist(BaseMedia):
         self,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
-    ) -> AsyncGenerator[ScrapeResult, None]:
+    ) -> AsyncGenerator[ScrapeResult[Video], None]:
         # I am too lazy to implement search filters
         url = self.url
         helper = Helper(core=self.core, constructor=Video)
@@ -476,7 +476,7 @@ class UserHelper(BaseMedia):
         self,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
-    ) -> AsyncGenerator[ScrapeResult, None]:
+    ) -> AsyncGenerator[ScrapeResult[Video], None]:
 
         url = self.url
         helper = Helper(core=self.core, constructor=Video)
@@ -501,7 +501,7 @@ class User(UserHelper):
         self,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
-    ) -> AsyncGenerator[ScrapeResult, None]:
+    ) -> AsyncGenerator[ScrapeResult[Playlist], None]:
         name = await self.get_field("name")
         if not isinstance(name, str) or not name:
             raise ValueError("Cannot fetch playlists, because you have not populated the html yet")
@@ -585,7 +585,7 @@ class Channel(BaseMedia):
         self,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
-    ) -> AsyncGenerator[ScrapeResult, None]:
+    ) -> AsyncGenerator[ScrapeResult[Video], None]:
 
         url = self.url
         helper = Helper(core=self.core, constructor=Video)
@@ -652,7 +652,7 @@ class Client:
         query: str,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
-    ) -> AsyncGenerator[ScrapeResult, None]:
+    ) -> AsyncGenerator[ScrapeResult[Video], None]:
         # I am too lazy to implement search filters
         helper = Helper(core=self.core, constructor=Video)
         page_urls = [f"https://redtube.com/?search={query}&page={page}" for page in range(1, pages + 1)]
