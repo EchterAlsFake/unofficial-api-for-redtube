@@ -138,6 +138,7 @@ class Video(BaseMedia):
     action_tags: dict | None = media_field("html")
     m3u8_base_url: str | None = media_field("html")
     author_name: str | None = media_field("html")
+    publish_date: str | None = media_field("html")
 
     # Optional
     uploader_id: str | None = None
@@ -174,6 +175,7 @@ class Video(BaseMedia):
         author_name = parser.css_first("a.video-infobox-link").text(strip=True)
         _link = parser.css_first("a.video-infobox-link").attributes.get("href")
         author_url = f"https://www.redtube.com{_link}"
+        publish_date = parser.css_first("span.video-infobox-date-added").text(strip=True)
 
         m3u8_source_url = None
         for media in media_definitions:
@@ -219,6 +221,7 @@ class Video(BaseMedia):
             "mp4_url": mp4_url,
             "action_tags": action_tags,
             "action_tags_raw": action_tags_raw,
+            "publish_date": publish_date
 
         }
 
