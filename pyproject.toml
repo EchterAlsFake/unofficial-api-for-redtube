@@ -60,6 +60,3 @@ redtube_api = "redtube_api.api:main"
 [tool.uv.build-backend]
 module-name = "redtube_api"
 module-root = ""
-
-[tool.uv.sources]
-eaf-base-api = { path = "../eaf_base_api", editable = true }
