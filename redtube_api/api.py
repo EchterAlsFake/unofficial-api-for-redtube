@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import re
+from functools import partial
 import json
 import logging
 import chompjs
@@ -24,6 +25,7 @@ import asyncio
 import argparse
 
 from redtube_api.modules import errors as provider_errors
+from base_api import append_url_path, profile_base_url, update_url_query
 from base_api.modules.provider import fetch_content, download_errors, download_hls
 from base_api.modules.logger import configure_app_logging, get_logger
 
@@ -555,16 +557,15 @@ class Playlist(BaseMedia):
         iterator_config: IteratorConfig | None = None,
     ) -> AsyncGenerator[ScrapeResult[Video], None]:
         # I am too lazy to implement search filters
-        url = self.url
+        url = self.resolved_url or self.url
         helper = Helper(core=self.core, constructor=Video)
-        sep = "&" if "?" in url else "?"
-        page_urls = [f"{url}{sep}page={page}" for page in range(1, pages + 1)]
+        page_urls = [update_url_query(url, page=page) for page in range(1, pages + 1)]
         if iterator_config is None:
             iterator_config = make_iterator_config()
 
         stream = helper.iterator(
             target_page_urls=page_urls,
-            item_extractor=extractor_html,
+            item_extractor=partial(extractor_html, base_url=url),
             iterator_config=iterator_config,
         )
         async with stream:
@@ -574,6 +575,10 @@ class Playlist(BaseMedia):
 
 @dataclass(kw_only=True, slots=True)
 class UserHelper(BaseMedia):
+
+    def __post_init__(self):
+        profile_base_url(self.url, depth=2)
+
     url: str
     core: BaseCore
     name: str | None = media_field("html")
@@ -676,14 +681,13 @@ class UserHelper(BaseMedia):
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
     ) -> AsyncGenerator[ScrapeResult[Video], None]:
-        url = self.url
-        sep = "&" if "?" in url else "?"
-        page_urls = [f"{url}{sep}page={page}" for page in range(1, pages + 1)]
+        url = self.resolved_url or self.url
+        page_urls = [update_url_query(url, page=page) for page in range(1, pages + 1)]
         return scrape_stream(
             core=self.core,
             constructor=Video,
             target_page_urls=page_urls,
-            item_extractor=extractor_html,
+            item_extractor=partial(extractor_html, base_url=url),
             iterator_config=iterator_config,
         )
 
@@ -701,12 +705,13 @@ class User(UserHelper):
         if not isinstance(name, str) or not name:
             raise ValueError("Cannot fetch playlists, because you have not populated the html yet")
 
-        page_urls = [f"https://redtube.com/user/{name}/playlists-data?page={page}" for page in range(1, pages + 1)]
+        base_url = append_url_path(profile_base_url(self.resolved_url or self.url), "playlists-data")
+        page_urls = [update_url_query(base_url, page=page) for page in range(1, pages + 1)]
         stream = scrape_stream(
             core=self.core,
             constructor=Playlist,
             target_page_urls=page_urls,
-            item_extractor=extractor_playlist_json,
+            item_extractor=partial(extractor_playlist_json, base_url=base_url),
             iterator_config=iterator_config,
         )
         async for result in stream:

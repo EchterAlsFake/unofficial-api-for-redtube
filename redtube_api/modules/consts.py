@@ -1,10 +1,10 @@
+from urllib.parse import urljoin
 import json
 from selectolax.lexbor import LexborHTMLParser
 
 
 HEADERS = {
     'Accept': '*/*',
-    'Accept-Language': 'en,en-US',
     'Connection': 'keep-alive',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0',
     'Referer': 'https://www.redtube.com/',
@@ -21,7 +21,7 @@ COOKIES = {
 }
 
 
-def extractor_html(html_content: str) -> list:
+def extractor_html(html_content: str, base_url: str = "https://www.redtube.com") -> list:
     videos_lol = []
     parser = LexborHTMLParser(html_content)
 
@@ -63,7 +63,7 @@ def extractor_html(html_content: str) -> list:
         # Targeted author link extraction (avoiding index relying like meta.css("a")[1])
         author_tag = meta.css_first("div.author-title-container a")
         _author_link = author_tag.attributes.get("href") if author_tag else None
-        author_link = f"https://www.redtube.com{_author_link}" if _author_link else None
+        author_link = urljoin(base_url, _author_link) if _author_link else None
 
         pornstars_names = []
         pornstars_urls = []
@@ -78,10 +78,10 @@ def extractor_html(html_content: str) -> list:
                 # Fixed the f-string quote collision by using single quotes inside
                 star_href = star.attributes.get('href')
                 if star_href:
-                    pornstars_urls.append(f"https://www.redtube.com{star_href}")
+                    pornstars_urls.append(urljoin(base_url, star_href))
 
         video_data = {
-            "url": f"https://www.redtube.com{link}" if link else None,
+            "url": urljoin(base_url, link) if link else None,
             "video_id": video_id,
             "uploader_id": uploader_id,
             "author_name": author_name,
@@ -100,7 +100,7 @@ def extractor_html(html_content: str) -> list:
     return videos_lol
 
 
-def extractor_playlist_json(content: str | dict) -> list:
+def extractor_playlist_json(content: str | dict, base_url: str = "https://www.redtube.com") -> list:
     if isinstance(content, str):
         try:
             data = json.loads(content)
@@ -129,7 +129,7 @@ def extractor_playlist_json(content: str | dict) -> list:
         url = playlist.get("url", None)
 
         # Build the absolute URL for the playlist
-        playlist_url = f"https://www.redtube.com{url}" if url else None
+        playlist_url = urljoin(base_url, url) if url else None
 
         playlist_data = {
             "views": views,
