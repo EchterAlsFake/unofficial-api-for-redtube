@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import re
+from urllib.parse import urljoin
 from functools import partial
 import json
 import logging
@@ -74,6 +75,13 @@ async def get_html_content(core: BaseCore, url: str, *, owner=None) -> str:
 
 @dataclass(kw_only=True, slots=True)
 class Video(BaseMedia):
+
+    def __post_init__(self):
+        if self.url.isdigit():
+            object.__setattr__(self, "url", f"https://www.redtube.com/{self.url}")
+        elif self.url.startswith("/") and self.url[1:].isdigit():
+            object.__setattr__(self, "url", f"https://www.redtube.com{self.url}")
+
     url: str
     core: BaseCore
     video_id: str | None = media_field("html")
@@ -99,13 +107,11 @@ class Video(BaseMedia):
     categories: list[str] | None = media_field("html")
     uploader_avatar: str | None = media_field("html")
     is_verified: bool | None = media_field("html")
-
-    # Optional
-    uploader_id: str | None = None
-    uploader_type: str | None = None
-    preview_video_url: str | None = None
-    pornstars_names: list[str] | None = None
-    pornstars_urls: list[str] | None = None
+    uploader_id: str | None = media_field("html")
+    uploader_type: str | None = media_field("html")
+    preview_video_url: str | None = media_field("html")
+    pornstars_names: list[str] | None = media_field("html")
+    pornstars_urls: list[str] | None = media_field("html")
 
     loader_methods: ClassVar[dict[str, str]] = {"html": "_load_html"}
     LAYOUT_ANCHORS: ClassVar[tuple[str, ...]] = (
@@ -170,8 +176,12 @@ class Video(BaseMedia):
             or config.get("mainRoll", {}).get("title")
         )
         if not title:
-            title_el = parser.css_first("h1.video_page_title, h1.tm_videoTitle")
+            title_el = parser.css_first("h1.video_page_title, h1.tm_videoTitle, h1")
             title = title_el.text(strip=True) if title_el else None
+            if not title:
+                og_title = parser.css_first('meta[property="og:title"]')
+                if og_title:
+                    title = og_title.attributes.get("content")
             if not title:
                 logger.warning("Could not extract video title for %s", self.url)
 
@@ -188,6 +198,12 @@ class Video(BaseMedia):
             if dur_el:
                 duration = dur_el.text(strip=True)
             else:
+                dur_meta = parser.css_first('meta[property="og:video:duration"], meta[property="video:duration"]')
+                if dur_meta:
+                    raw_meta_dur = dur_meta.attributes.get("content")
+                    if raw_meta_dur and raw_meta_dur.isdigit():
+                        duration = int(raw_meta_dur)
+            if duration is None:
                 logger.warning("Could not extract duration for %s", self.url)
 
         # Thumbnail / Poster
@@ -199,8 +215,12 @@ class Video(BaseMedia):
             poster_el = parser.css_first("img.videoElementPoster, .mgp_videoPoster img")
             if poster_el:
                 thumbnail = poster_el.attributes.get("src")
-            else:
-                logger.warning("Could not extract thumbnail for %s", self.url)
+        if not thumbnail:
+            thumb_meta = parser.css_first('meta[property="og:image"], meta[name="twitter:image"]')
+            if thumb_meta:
+                thumbnail = thumb_meta.attributes.get("content")
+        if not thumbnail:
+            logger.warning("Could not extract thumbnail for %s", self.url)
 
         # Embed code
         embed_code = (
@@ -236,7 +256,7 @@ class Video(BaseMedia):
             is_vr = bool(re.search(r'\b(?:isVr|vrProps)\s*:\s*true\b', html_content, re.IGNORECASE))
 
         # Author name and URL
-        author_el = parser.css_first("a.video-infobox-link, .video-infobox-uploader-name a")
+        author_el = parser.css_first("a.video-infobox-link, .video-infobox-uploader-name a, div.author-title-container a, div.video-infobox-uploader a")
         if author_el:
             author_name = author_el.text(strip=True) or None
             href = author_el.attributes.get("href")
@@ -293,6 +313,29 @@ class Video(BaseMedia):
 
         is_verified = bool(parser.css_first(".showpage_video_infobox_badge, .verified-icon"))
 
+        # Uploader id & type
+        sub_btn = parser.css_first("a.subscribe_button[data-item-id], a[data-item-id]")
+        uploader_id = sub_btn.attributes.get("data-item-id") if sub_btn else None
+        uploader_type = sub_btn.attributes.get("data-item-type") if sub_btn else None
+
+        # Preview video URL
+        preview_video_url = config.get("preview_video_url") or config.get("mainRoll", {}).get("previewUrl")
+
+        # Performers
+        pornstars_names: list[str] = []
+        pornstars_urls: list[str] = []
+        info_wrap = parser.css_first("#video_info_wrap, #video-infobox")
+        if info_wrap:
+            for s in info_wrap.css("a.tm_pornstar_name, a.ps_info_name, a[href*='/pornstar/']"):
+                s_name = s.text(strip=True)
+                s_href = s.attributes.get("href")
+                if s_name and not s_name.lower().startswith("rank") and s_href and "/pornstar/" in s_href:
+                    if s_name not in pornstars_names:
+                        pornstars_names.append(s_name)
+                        full_star_url = urljoin(self.url, s_href)
+                        if full_star_url not in pornstars_urls:
+                            pornstars_urls.append(full_star_url)
+
         return {
             "video_id": video_id,
             "title": title,
@@ -316,39 +359,45 @@ class Video(BaseMedia):
             "categories": categories,
             "uploader_avatar": uploader_avatar,
             "is_verified": is_verified,
+            "uploader_id": uploader_id,
+            "uploader_type": uploader_type,
+            "preview_video_url": preview_video_url,
+            "pornstars_names": pornstars_names,
+            "pornstars_urls": pornstars_urls,
         }
 
     async def author(self, load_html: bool = False) -> Amateur | Pornstar | Channel | User:
         url = await self.get_field("author_url")
         if not isinstance(url, str):
             raise ValueError(f"No author URL found for {self.url}")
+        full_url = urljoin(self.url, url)
 
-        if "amateur" in url:
-            amateur = Amateur(url=url, core=self.core)
+        if "amateur" in full_url:
+            amateur = Amateur(url=full_url, core=self.core)
             if load_html:
                 await amateur.load_sources("html")
             return amateur
 
-        if "pornstar" in url:
-            pornstar = Pornstar(url=url, core=self.core)
+        if "pornstar" in full_url:
+            pornstar = Pornstar(url=full_url, core=self.core)
             if load_html:
                 await pornstar.load_sources("html")
             return pornstar
 
-        if "channel" in url:
-            channel = Channel(url=url, core=self.core)
+        if "channel" in full_url:
+            channel = Channel(url=full_url, core=self.core)
             if load_html:
                 await channel.load_sources("html")
             return channel
 
-        if "user" in url or "members" in url:
-            user = User(url=url, core=self.core)
+        if "user" in full_url or "members" in full_url:
+            user = User(url=full_url, core=self.core)
             if load_html:
                 await user.load_sources("html")
             return user
 
-        logger.warning("Could not determine Author type from URL '%s' on %s, defaulting to User", url, self.url)
-        user = User(url=url, core=self.core)
+        logger.warning("Could not determine Author type from URL '%s' on %s, defaulting to User", full_url, self.url)
+        user = User(url=full_url, core=self.core)
         if load_html:
             await user.load_sources("html")
         return user
@@ -397,6 +446,13 @@ class Video(BaseMedia):
 
 @dataclass(kw_only=True, slots=True)
 class Playlist(BaseMedia):
+
+    def __post_init__(self):
+        if self.url.isdigit():
+            object.__setattr__(self, "url", f"https://www.redtube.com/playlist/{self.url}")
+        elif self.url.startswith("/playlist/") or (self.url.startswith("/") and self.url[1:].isdigit()):
+            object.__setattr__(self, "url", f"https://www.redtube.com{self.url}")
+
     url: str
     core: BaseCore
     title: str | None = media_field("html")
@@ -476,9 +532,9 @@ class Playlist(BaseMedia):
                     continue
                 text_node = col.css_first(".playlist_stats_text")
                 label = text_node.text(strip=True).lower() if text_node else ""
-                if any(k in label for k in ("bewertung", "rating", "vote")):
+                if any(k in label for k in ("bewertung", "rating", "vote", "evaluat", "valuta", "calific")):
                     rating_count = val
-                elif any(k in label for k in ("ansicht", "view", "vue", "vista")):
+                elif any(k in label for k in ("ansicht", "view", "vue", "vista", "reproduc", "visualiz")):
                     views = val
                 elif any(k in label for k in ("video",)):
                     video_count = val
@@ -502,7 +558,7 @@ class Playlist(BaseMedia):
         if not video_count:
             desc_node = parser.css_first("p.playlist_desc")
             if desc_node:
-                match = re.search(r"\((\d+)\s*Videos?\)", desc_node.text())
+                match = re.search(r"\((\d+)\s*(?:Videos?|vidéos?)\)", desc_node.text(), re.IGNORECASE)
                 if match:
                     video_count = match.group(1)
 
@@ -551,33 +607,33 @@ class Playlist(BaseMedia):
             await user.load_sources("html")
         return user
 
-    async def get_videos(
+    def get_videos(
         self,
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
     ) -> AsyncGenerator[ScrapeResult[Video], None]:
-        # I am too lazy to implement search filters
         url = self.resolved_url or self.url
-        helper = Helper(core=self.core, constructor=Video)
         page_urls = [update_url_query(url, page=page) for page in range(1, pages + 1)]
-        if iterator_config is None:
-            iterator_config = make_iterator_config()
-
-        stream = helper.iterator(
+        return scrape_stream(
+            core=self.core,
+            constructor=Video,
             target_page_urls=page_urls,
             item_extractor=partial(extractor_html, base_url=url),
             iterator_config=iterator_config,
         )
-        async with stream:
-            async for result in stream:
-                yield result
 
 
 @dataclass(kw_only=True, slots=True)
 class UserHelper(BaseMedia):
 
     def __post_init__(self):
-        profile_base_url(self.url, depth=2)
+        url = self.url
+        url = re.sub(r"/channel/(?=[^/?#]+)", "/channels/", url)
+        url = re.sub(r"/pornstars/(?=[^/?#]+)", "/pornstar/", url)
+        url = re.sub(r"/amateurs/(?=[^/?#]+)", "/amateur/", url)
+        url = re.sub(r"/users/(?=[^/?#]+)", "/user/", url)
+        clean_url = profile_base_url(url, depth=2)
+        object.__setattr__(self, "url", clean_url)
 
     url: str
     core: BaseCore
@@ -595,7 +651,12 @@ class UserHelper(BaseMedia):
 
     async def _load_html(self) -> dict[str, object]:
         html_content = await get_html_content(core=self.core, url=self.url, owner=self)
-        return await asyncio.to_thread(self._extract_html, html_content)
+        data = await asyncio.to_thread(self._extract_html, html_content)
+        if not data.get("user_id"):
+            m = re.search(r'/(?:user|channel|channels|pornstar|amateur)/(\d+)', self.url)
+            if m:
+                data["user_id"] = m.group(1)
+        return data
 
     @classmethod
     def _extract_html(cls, html_content: str) -> dict[str, object]:
@@ -618,14 +679,30 @@ class UserHelper(BaseMedia):
             if matches:
                 name = matches[-1]
         if not name:
+            title_node = parser.css_first("title")
+            if title_node:
+                t = title_node.text(strip=True)
+                m = re.search(r"^(.*?)(?:'s\s+(?:Videos|Profile)|[\s\-|]+RedTube)", t, re.IGNORECASE)
+                if m and m.group(1).strip():
+                    name = m.group(1).strip()
+        if not name:
             logger.warning("Failed to extract name for %s", cls.__name__)
 
         # Banner & Avatar
-        banner_el = parser.css_first(".banner-wrapper img, .header-banner-wrapper img.banner-image")
-        banner_url = (banner_el.attributes.get("data-src") or banner_el.attributes.get("src")) if banner_el else None
+        def _clean_img(el) -> str | None:
+            if not el:
+                return None
+            for attr in ("data-src", "data-thumb_url", "data-original", "src"):
+                val = el.attributes.get(attr)
+                if val and not val.startswith("data:"):
+                    return val
+            return None
 
-        avatar_el = parser.css_first(".avatar-wrapper img, .logo-wrapper img, img.avatar-image, img.channel_logo")
-        avatar_url = (avatar_el.attributes.get("data-src") or avatar_el.attributes.get("src")) if avatar_el else None
+        banner_el = parser.css_first(".banner-wrapper img, .header-banner-wrapper img.banner-image, .banner img")
+        banner_url = _clean_img(banner_el)
+
+        avatar_el = parser.css_first(".avatar-wrapper img, .logo-wrapper img, img.avatar-image, img.channel_logo, .user-avatar img")
+        avatar_url = _clean_img(avatar_el)
 
         # User / Channel / Pornstar ID
         btn = parser.css_first(".subscribe_button, a.subscribe, .subscribe_button_wrap a")
@@ -648,20 +725,22 @@ class UserHelper(BaseMedia):
                 continue
             val = val_node.text(strip=True)
             lbl = lbl_node.text(strip=True).lower() if lbl_node else ""
-            if any(k in lbl for k in ("rank", "rang")):
+            if any(k in lbl for k in ("rank", "rang", "posic", "posto", "classifica")):
                 rank = val
-            elif any(k in lbl for k in ("view", "ansicht", "vue", "vista")):
+            elif any(k in lbl for k in ("view", "ansicht", "vue", "vista", "reproduc", "visualiz")):
                 views = val
-            elif any(k in lbl for k in ("subscriber", "abonnent", "abo")):
+            elif any(k in lbl for k in ("subscriber", "abonnent", "abo", "suscriptor", "iscrit")):
                 subscribers_count = val
-            elif any(k in lbl for k in ("video",)):
+            elif any(k in lbl for k in ("video", "vidéo")):
                 videos_count = val
 
-        # Fallback for videos_count (e.g. from subtitle "Anzeige 1 - 26 von 69")
+        # Fallback for videos_count (e.g. from subtitle "Anzeige 1 - 26 von 69", "Visualizzazione di 1 - 8 su 209")
         if not videos_count:
             sub = parser.css_first(".videos_count_subtitle")
             if sub:
-                m = re.search(r"(?:von|of)\s+([0-9.,KMBkmb]+)", sub.text(strip=True), re.IGNORECASE)
+                m = re.search(r"[-–]\s*\d+\s*(?:von|of|sur|di|de|su|/)\s*([0-9.,KMBkmb]+)", sub.text(strip=True), re.IGNORECASE)
+                if not m:
+                    m = re.search(r"(?:von|of|sur|su|/)\s+([0-9.,KMBkmb]+)", sub.text(strip=True), re.IGNORECASE)
                 if m:
                     videos_count = m.group(1)
 
@@ -701,10 +780,6 @@ class User(UserHelper):
         pages: int = 2,
         iterator_config: IteratorConfig | None = None,
     ) -> AsyncGenerator[ScrapeResult[Playlist], None]:
-        name = await self.get_field("name")
-        if not isinstance(name, str) or not name:
-            raise ValueError("Cannot fetch playlists, because you have not populated the html yet")
-
         base_url = append_url_path(profile_base_url(self.resolved_url or self.url), "playlists-data")
         page_urls = [update_url_query(base_url, page=page) for page in range(1, pages + 1)]
         stream = scrape_stream(
@@ -776,9 +851,15 @@ class Client:
             core = BaseCore()
         self.core = core
         self.core.initialize_session()
-        assert isinstance(self.core.session, AsyncSession)
-        self.core.session.headers.update(HEADERS)
-        self.core.session.cookies.update(COOKIES)
+        if getattr(self.core, "session", None) is not None:
+            self.core.session.headers.update(HEADERS)
+            self.core.session.cookies.update(COOKIES)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.core.close()
 
     async def get_video(self, url: str, load_html: bool = True) -> Video:
         video = Video(core=self.core, url=url)
@@ -823,12 +904,15 @@ class Client:
         iterator_config: IteratorConfig | None = None,
     ) -> AsyncGenerator[ScrapeResult[Video], None]:
         # I am too lazy to implement search filters
-        page_urls = [f"https://redtube.com/?search={query}&page={page}" for page in range(1, pages + 1)]
+        page_urls = [
+            update_url_query("https://www.redtube.com/", search=query, page=page)
+            for page in range(1, pages + 1)
+        ]
         return scrape_stream(
             core=self.core,
             constructor=Video,
             target_page_urls=page_urls,
-            item_extractor=extractor_html,
+            item_extractor=partial(extractor_html, base_url="https://www.redtube.com"),
             iterator_config=iterator_config,
         )
 
@@ -855,8 +939,12 @@ async def run_main(args_list: list[str] | None = None):
     if args.download:
         urls.append(args.download)
     if args.file:
-        with open(args.file, "r") as f:
-            urls.extend([line.strip() for line in f if line.strip()])
+        try:
+            with open(args.file, "r") as f:
+                urls.extend([line.strip() for line in f if line.strip()])
+        except OSError as e:
+            print(f"Error reading file '{args.file}': {e}")
+            return
 
     if not urls:
         parser.print_help()

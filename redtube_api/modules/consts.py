@@ -26,11 +26,11 @@ def extractor_html(html_content: str, base_url: str = "https://www.redtube.com")
     parser = LexborHTMLParser(html_content)
 
     # Ensure the parent element exists before querying its children
-    stuff = parser.css_first("ul.videos_grid")
+    stuff = parser.css_first("ul#playlist_videos") or parser.css_first("ul.videos_grid")
     if not stuff:
         return videos_lol
 
-    videos = stuff.css("li")
+    videos = stuff.css("li[data-video-id]")
 
     for video in videos:
         # Attributes from the main wrapper
@@ -44,12 +44,28 @@ def extractor_html(html_content: str, base_url: str = "https://www.redtube.com")
         link = a_tag.attributes.get("href") if a_tag else None
 
         img_tag = a_tag.css_first("img") if a_tag else None
-        # Often lazy-loaded images hold the actual URL in 'data-src' or 'data-srcset'
-        thumbnail = img_tag.attributes.get("data-srcset") or img_tag.attributes.get("srcset") if img_tag else None
+        thumbnail = None
+        if img_tag:
+            thumbnail = (
+                img_tag.attributes.get("data-src")
+                or img_tag.attributes.get("data-o_thumb")
+                or img_tag.attributes.get("data-thumb_url")
+            )
+            if not thumbnail:
+                srcset = img_tag.attributes.get("data-srcset") or img_tag.attributes.get("srcset")
+                if srcset:
+                    # In srcset: "url1 1x, url2 2x" -> take the last (highest resolution) or first URL
+                    urls = [p.strip().split()[0] for p in srcset.split(",") if p.strip()]
+                    thumbnail = urls[-1] if urls else None
+            if not thumbnail:
+                src = img_tag.attributes.get("src")
+                if src and not src.startswith("data:"):
+                    thumbnail = src
+
         preview_video_url = img_tag.attributes.get("data-mediabook") if img_tag else None
 
         # Safe duration extraction
-        dur_tag = video.css_first("span.tm_video_duration")
+        dur_tag = video.css_first("span.tm_video_duration, span.video_duration, span.duration")
         duration = dur_tag.text(strip=True) if dur_tag else None
 
         # Meta wrapper
@@ -58,10 +74,10 @@ def extractor_html(html_content: str, base_url: str = "https://www.redtube.com")
             continue
 
         title_tag = meta.css_first("a.video-title-text")
-        title = title_tag.attributes.get("title") if title_tag else None
+        title = (title_tag.attributes.get("title") or title_tag.text(strip=True)) if title_tag else None
 
         # Targeted author link extraction (avoiding index relying like meta.css("a")[1])
-        author_tag = meta.css_first("div.author-title-container a")
+        author_tag = meta.css_first("div.author-title-container a, div.video-infobox-uploader a")
         _author_link = author_tag.attributes.get("href") if author_tag else None
         author_link = urljoin(base_url, _author_link) if _author_link else None
 
@@ -74,8 +90,10 @@ def extractor_html(html_content: str, base_url: str = "https://www.redtube.com")
             # Query ONLY inside the performers list
             pornstars = _pornstars.css("a")
             for star in pornstars:
-                pornstars_names.append(star.text(strip=True))
-                # Fixed the f-string quote collision by using single quotes inside
+                star_name = star.text(strip=True).rstrip(",").strip()
+                if not star_name or star_name in pornstars_names:
+                    continue
+                pornstars_names.append(star_name)
                 star_href = star.attributes.get('href')
                 if star_href:
                     pornstars_urls.append(urljoin(base_url, star_href))
@@ -111,8 +129,19 @@ def extractor_playlist_json(content: str | dict, base_url: str = "https://www.re
 
     playlist_urls = []
 
-    # Safely navigate to the nested list of playlists (data -> data)
-    playlists = data.get("data", {}).get("data", []) if isinstance(data, dict) else []
+    # Safely navigate to the list of playlists
+    if isinstance(data, dict):
+        raw_data = data.get("data", [])
+        if isinstance(raw_data, dict):
+            playlists = raw_data.get("data", [])
+        elif isinstance(raw_data, list):
+            playlists = raw_data
+        else:
+            playlists = []
+    elif isinstance(data, list):
+        playlists = data
+    else:
+        playlists = []
 
     for playlist in playlists:
         if not isinstance(playlist, dict):
