@@ -1,3 +1,18 @@
+# 2.0.0
+
+Release 2.0.0
+
+Update pagination handling, validation, and documentation.
+
+Changes since 1.4.4:
+
+```text
+README.md          |  14 +++++
+ pyproject.toml     |   4 +-
+ redtube_api/api.py | 157 ++++++++++++++++++++++++++++++++++++++++++++++-------
+ 3 files changed, 152 insertions(+), 23 deletions(-)
+```
+
 # Changelog
 
 ## 1.4.4 — 2026-10-27
