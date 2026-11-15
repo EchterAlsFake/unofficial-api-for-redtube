@@ -19,3 +19,4 @@ build/
 .coverage*
 *.log
 *.mp4.tmp
+uv.lock
