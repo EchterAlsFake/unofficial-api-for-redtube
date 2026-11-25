@@ -12,10 +12,6 @@ HEADERS = {
 }
 
 COOKIES = {
-    'accessAgeDisclaimerPH': '1',
-    'accessAgeDisclaimerUK': '1',
-    'accessRT': '1',
-    'age_verified': '1',
     'cookieBannerState': '1',
     'platform': 'pc'
 }

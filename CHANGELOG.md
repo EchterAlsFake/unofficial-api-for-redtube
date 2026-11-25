@@ -1,3 +1,7 @@
+# 2.0.1 - 2026-11-25
+
+- Remove preset cookies that asserted age or access status on new sessions.
+
 # 2.0.0
 
 Release 2.0.0

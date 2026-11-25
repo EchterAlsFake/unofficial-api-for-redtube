@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "unofficial-api-for-redtube"
-version = "2.0.0"
+version = "2.0.1"
 description = "An asynchronous API wrapper and scraper for redtube.com"
 authors = [
   {name = "EchterAlsFake", email = "EchterAlsFake@proton.me"}
